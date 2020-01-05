@@ -49,7 +49,20 @@ public:
 		this->data->second = stop;
 		this->data->type = type;
 		this->data->strand = strands;
+		if (strands.first) {
+			this->data->strands[0] = true;
+		} else {
+			this->data->strands[1] = true;
+		}
+
+		if (strands.second) {
+			this->data->strands[2] = true;
+		} else {
+			this->data->strands[3] = true;
+		}
+
 		this->data->genotype = meta_info.genotype; //do I need this?
+		this->data->types[type] = true;
 
 		init();
 		Support_Node * tmp = new Support_Node();
@@ -62,6 +75,7 @@ public:
 		tmp->num_support = meta_info.num_reads;
 		tmp->id = meta_info.caller_id;
 		tmp->starts.push_back(start.position);
+		tmp->sv_lengths.push_back(meta_info.sv_len);
 		tmp->stops.push_back(stop.position);
 		tmp->types.push_back(type);
 		tmp->genotype = meta_info.genotype;
@@ -102,9 +116,23 @@ public:
 			this->data->caller_info.push_back(tmp);
 		}
 
+		this->data->types[type] = true; //extend if there is an in sample merge!
+		if (strands.first) {
+			this->data->strands[0] = true;
+		} else {
+			this->data->strands[1] = true;
+		}
+
+		if (strands.second) {
+			this->data->strands[2] = true;
+		} else {
+			this->data->strands[3] = true;
+		}
+
 		this->data->caller_info[index]->starts.push_back(start.position);
 		this->data->caller_info[index]->stops.push_back(stop.position);
 		this->data->caller_info[index]->types.push_back(type);
+		this->data->caller_info[index]->sv_lengths.push_back(meta_info.sv_len);
 		this->data->caller_info[index]->num_support.first = std::max(meta_info.num_reads.first, this->data->caller_info[index]->num_support.first);
 		this->data->caller_info[index]->num_support.second = std::max(meta_info.num_reads.second, this->data->caller_info[index]->num_support.second);
 		this->data->caller_info[index]->genotype = meta_info.genotype;

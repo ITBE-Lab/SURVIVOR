@@ -24,7 +24,7 @@ bool is_valid_alleles(std::pair<std::string, std::string> alleles) {
 
 	//search for a <> tag in second:
 	for (size_t i = 0; i < alleles.second.size(); i++) {
-		if (alleles.second[i] == '<') {
+		if (alleles.second[i] == '<' || alleles.second[i] == ':') {
 			return false;
 		}
 	}
@@ -43,14 +43,14 @@ std::string get_support_vec(std::vector<Support_Node *> caller_info) {
 	std::string ss;
 	ss.resize(Parameter::Instance()->max_caller, '0');
 	for (size_t i = 0; i < caller_info.size(); i++) {
-		if (strncmp(caller_info[i]->genotype.c_str(), "0/0", 3) != 0) {
-			ss[caller_info[i]->id] = '1';
-		}
+		//if (strncmp(caller_info[i]->genotype.c_str(), "0/0", 3) != 0) {
+		ss[caller_info[i]->id] = '1';
+		//}
 	}
 	return ss;
 }
 int get_support(std::vector<Support_Node *> caller_info) {
-	//return caller_info.size();
+	return caller_info.size();
 
 	int support = 0;
 	for (size_t i = 0; i < caller_info.size(); i++) {
@@ -73,6 +73,20 @@ const std::string currentDateTime() {
 	return buf;
 }
 void print_header(FILE *& file, std::vector<std::string> names, std::map<std::string, int> chrs) {
+	std::map<std::string, int> names_checked;
+	for (size_t i = 0; i < names.size(); i++) { // To aviod reporting the same identifier twice!
+		if (names_checked.find(names[i]) == names_checked.end()) {
+			names_checked[names[i]] = 1;
+
+		} else {
+			std::stringstream new_name;
+			new_name << names[i];
+			new_name << "_";
+			new_name << names_checked[names[i]];
+			names_checked[names[i]]++;
+			names[i] = new_name.str();
+		}
+	}
 	fprintf(file, "%s", "##fileformat=VCFv4.1\n");
 	fprintf(file, "%s", "##source=SURVIVOR\n");
 	std::string time = currentDateTime();
@@ -83,8 +97,10 @@ void print_header(FILE *& file, std::vector<std::string> names, std::map<std::st
 		//	std::cout<<"Header: "<<(*i).first<<" "<<(*i).second<<std::endl;
 		fprintf(file, "%s", "##contig=<ID=");
 		fprintf(file, "%s", (*i).first.c_str());
-		fprintf(file, "%s", ",length=");
-		fprintf(file, "%i", (*i).second);
+		if ((*i).second > 0) {
+			fprintf(file, "%s", ",length=");
+			fprintf(file, "%i", (*i).second);
+		}
 		fprintf(file, "%s", ">\n");
 	}
 	fprintf(file, "%s", "##ALT=<ID=DEL,Description=\"Deletion\">\n");
@@ -100,7 +116,7 @@ void print_header(FILE *& file, std::vector<std::string> names, std::map<std::st
 	fprintf(file, "%s", "##INFO=<ID=RE,Number=1,Type=Integer,Description=\"read support\">\n");
 	fprintf(file, "%s", "##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description=\"Imprecise structural variation\">\n");
 	fprintf(file, "%s", "##INFO=<ID=PRECISE,Number=0,Type=Flag,Description=\"Precise structural variation\">\n");
-	fprintf(file, "%s", "##INFO=<ID=SVLEN,Number=1,Type=Float,Description=\"Length of the SV\">\n");
+	fprintf(file, "%s", "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length of the SV\">\n");
 	fprintf(file, "%s", "##INFO=<ID=SVMETHOD,Number=1,Type=String,Description=\"Method for generating this merged VCF file.\">\n");
 	fprintf(file, "%s", "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of the SV.\">\n");
 	fprintf(file, "%s", "##INFO=<ID=SUPP_VEC,Number=1,Type=String,Description=\"Vector of supporting samples.\">\n");
@@ -238,7 +254,13 @@ void print_GTs(std::ostringstream & convert, SVS_Node * entry) {
 				}
 			}
 			convert << ":";   //ID VCF
-			convert << entry->caller_info[pos]->vcf_ID;
+			for (size_t j = 0; j < entry->caller_info[pos]->vcf_ID.size(); j++) {
+				if (entry->caller_info[pos]->vcf_ID[j] != ':') {
+					convert << entry->caller_info[pos]->vcf_ID[j];
+				} else {
+					convert << "_";
+				}
+			}
 
 			if (is_valid_alleles(entry->caller_info[pos]->alleles)) {
 				convert << ":";   //RAL
@@ -263,11 +285,24 @@ void print_GTs(std::ostringstream & convert, SVS_Node * entry) {
 				}
 				convert << entry->first.chr;
 				convert << "_";
-				convert << entry->caller_info[pos]->starts[j];
+				if (entry->caller_info[pos]->starts[j] != 0) {
+					convert << entry->caller_info[pos]->starts[j];
+				} else {
+					convert << "1";
+				}
 				convert << "-";
 				convert << entry->second.chr;
 				convert << "_";
-				convert << entry->caller_info[pos]->stops[j];
+				if (entry->caller_info[pos]->starts[j] != 0) {
+					if (entry->caller_info[pos]->types[j] == 4) {   //TODO for mike A.
+						convert << std::max(entry->caller_info[pos]->stops[j] - entry->caller_info[pos]->sv_lengths[j], 1);
+					} else {
+						convert << entry->caller_info[pos]->stops[j];   //entry->second.position;
+					}
+					//convert << entry->caller_info[pos]->stops[j];
+				} else {
+					convert << "1";
+				}
 			}
 			pos++;
 		} else { //check len!
@@ -374,7 +409,11 @@ void print_entry_overlap(FILE *& file, SVS_Node * entry, int id) {
 
 	convert << entry->first.chr;   //caller_info[index]->starts[0].chr;
 	convert << "\t";
-	convert << entry->caller_info[index]->starts[0];  //entry->first.position;
+	if (entry->caller_info[index]->starts[0] != 0) {
+		convert << entry->caller_info[index]->starts[0];  //entry->first.position;
+	} else {
+		convert << "1";
+	}
 	convert << "\t";
 	if (is_valid_id(entry->caller_info[index]->vcf_ID)) {
 		for (size_t i = 0; entry->caller_info[index]->vcf_ID[i] != ';' && i < entry->caller_info[index]->vcf_ID.size(); i++) {
@@ -389,7 +428,6 @@ void print_entry_overlap(FILE *& file, SVS_Node * entry, int id) {
 
 	convert << "\t";
 
-
 	//REF / ALT field:
 	if (entry->type == 3) { //FOR TRA for the BND annotation
 		convert << "N\t";
@@ -397,13 +435,21 @@ void print_entry_overlap(FILE *& file, SVS_Node * entry, int id) {
 			convert << "]";
 			convert << entry->second.chr;
 			convert << ":";
-			convert << entry->second.position;
+			if (entry->second.position != 0) {
+				convert << entry->second.position;
+			} else {
+				convert << "1";
+			}
 			convert << "]N";
 		} else {
 			convert << "N[";
 			convert << entry->second.chr;
 			convert << ":";
-			convert << entry->second.position;
+			if (entry->second.position != 0) {
+				convert << entry->second.position;
+			} else {
+				convert << "1";
+			}
 			convert << "[";
 		}
 	} else {
@@ -426,7 +472,6 @@ void print_entry_overlap(FILE *& file, SVS_Node * entry, int id) {
 		}
 	}
 	convert << "\t";
-
 
 	int max_qual = -1;
 	for (size_t i = 0; i < entry->caller_info.size(); i++) {
@@ -461,11 +506,20 @@ void print_entry_overlap(FILE *& file, SVS_Node * entry, int id) {
 	 convert << get_stop_medpos(entry->caller_info);*/
 	convert << ";SVTYPE=";
 	convert << trans_type(entry->caller_info[index]->types[0]);
-	convert << ";SVMETHOD=SURVIVORv2;CHR2=";
+	convert << ";SVMETHOD=SURVIVOR";
+	convert << Parameter::Instance()->version;
+	convert << ";CHR2=";
 	convert << entry->second.chr;   //caller_info[index]->stops[0].chr;
 	convert << ";END=";
-	convert << entry->caller_info[index]->stops[0];   //entry->second.position;
-
+	if (entry->caller_info[index]->stops[0] != 0) {
+		if (entry->caller_info[index]->types[0] == 4) {   //TODO for mike A.
+			convert << std::max((entry->caller_info[index]->stops[0] - (int)entry->caller_info[index]->sv_lengths[0]), 1);
+		} else {
+			convert << entry->caller_info[index]->stops[0];   //entry->second.position;
+		}
+	} else {
+		convert << "1";
+	}
 	convert << ";CIPOS=";
 
 	convert << cipos.first;
@@ -523,7 +577,7 @@ bool numeric_string_compare(const std::string& s1, const std::string& s2) {
 std::string parse_name(char * buffer) {
 	size_t i = 0;
 	std::string name = "";
-	while (buffer[i] != ',') {
+	while (buffer[i] != ',' && (buffer[i] != '>' && buffer[i] != '\n')) {
 		name += buffer[i];
 		i++;
 	}
@@ -535,8 +589,8 @@ void parse_vcf_header(std::map<std::string, int> &chrs, std::string filename) {
 	std::ifstream myfile;
 	myfile.open(filename.c_str(), std::ifstream::in);
 	if (!myfile.good()) {
-		std::cout << "VCF Parser: could not open file: " << filename.c_str() << std::endl;
-		exit(0);
+		std::cerr << "VCF Parser: could not open file: " << filename.c_str() << std::endl;
+		exit(1);
 	}
 	getline(myfile, buffer);
 	while (!myfile.eof() && buffer[0] == '#') {
@@ -558,12 +612,15 @@ void parse_vcf_header(std::map<std::string, int> &chrs, std::string filename) {
 					break;
 				}
 			}
+			if (chrs.find(name) == chrs.end()) {
+				chrs[name] = -1;
+			}
 		}
 		getline(myfile, buffer);
 	}
 }
 
-void combine_calls_svs(std::string files, int max_dist, int min_support, int type_save, int strand_save, int dynamic_size, int min_svs, std::string output) {
+void combine_calls_svs(std::string files, double max_dist, int min_support, int type_save, int strand_save, int dynamic_size, int min_svs, std::string output) {
 	std::vector<std::string> names = parse_filename(files);
 
 	Parameter::Instance()->max_caller = names.size();
@@ -585,6 +642,9 @@ void combine_calls_svs(std::string files, int max_dist, int min_support, int typ
 		for (size_t j = 0; j < entries.size(); j++) {
 			breakpoint_str start = convert_position(entries[j].start);
 			breakpoint_str stop = convert_position(entries[j].stop);
+			if (entries[j].type == 4) { //TODO for mike A.
+				stop.position += entries[j].sv_len;
+			}
 			meta_data_str tmp;
 			tmp.caller_id = (int) id;
 			tmp.genotype = entries[j].genotype;
@@ -594,6 +654,7 @@ void combine_calls_svs(std::string files, int max_dist, int min_support, int typ
 			tmp.pre_supp_vec = entries[j].prev_support_vec;
 			tmp.vcf_ID = entries[j].sv_id;
 			tmp.allleles = entries[j].alleles;
+
 			bst.insert(start, stop, entries[j].type, entries[j].strands, tmp, root);
 		}
 		entries.clear();
@@ -630,6 +691,9 @@ void combine_calls_svs(std::string files, int max_dist, int min_support, int typ
 			}
 
 			if (support >= min_support && len > min_svs) {
+				if(Parameter::Instance()->use_strand || Parameter::Instance()->use_type){
+
+				}
 				print_entry_overlap(file, (*i), id);
 			}
 
