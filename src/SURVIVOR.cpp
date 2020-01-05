@@ -95,6 +95,18 @@ void official_interface(int argc, char *argv[]) {
 				std::cerr << "4: output prefix" << std::endl;
 			}
 			exit(0);
+		} else if (strcmp(argv[1], "simreads_n") == 0) {
+
+			if (argc == 6) {
+				simulate_reads_n(std::string(argv[2]), std::string(argv[3]), atoi(argv[4]), std::string(argv[5]));
+			} else {
+				std::cerr << "No parameters provided:" << std::endl;
+				std::cerr << "1: Reference fasta file" << std::endl;
+				std::cerr << "2: error profile file (see scan)" << std::endl;
+				std::cerr << "3: number of reads" << std::endl;
+				std::cerr << "4: output prefix" << std::endl;
+			}
+			exit(0);
 		} else if (strcmp(argv[1], "eval") == 0) {
 			if (argc == 6) {
 				//eval VCF calls for SV
@@ -289,6 +301,7 @@ void official_interface(int argc, char *argv[]) {
 	std::cerr << "\tsimSV\tSimulates SVs and SNPs on a reference genome." << std::endl;
 	std::cerr << "\tscanreads\tObtain error profiles form mapped reads for simulation." << std::endl;
 	std::cerr << "\tsimreads\tSimulates long reads (Pacio or ONT)." << std::endl;
+	std::cerr << "\tsimreads_n\tSimulates long reads (Pacio or ONT). [exact amount instead of coverage]" << std::endl;
 	std::cerr << "\teval\tEvaluates a VCF file after SV calling over simulated data." << std::endl;
 	std::cerr << std::endl;
 

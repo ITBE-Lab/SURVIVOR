@@ -21,5 +21,6 @@
 #include "Error_scanner.h"
 using namespace std;
 void simulate_reads(std::string genome,std::string error_profile,int coverage, std::string output);
+void simulate_reads_n(std::string genome,std::string error_profile,int coverage, std::string output);
 
 #endif /* NANOPORE_SIM_H_ */
